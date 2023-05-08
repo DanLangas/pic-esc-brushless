@@ -1,0 +1,78 @@
+#include <xc.h>
+
+// Configure the oscillator frequency
+#pragma config FOSC = INTOSC // Internal oscillator
+#pragma config WDTE = OFF    // Watchdog timer disabled
+#pragma config PWRTE = OFF   // Power-up timer disabled
+#pragma config MCLRE = ON    // MCLR pin enabled
+#pragma config CP = OFF      // Code protection disabled
+#pragma config LVP = OFF     // Low voltage programming disabled
+
+// Define the input and output pins
+#define BUTTON_PIN RA0
+#define SERVO_PIN  RB0
+
+// Define the PWM parameters
+#define PWM_PERIOD  20000  // 20ms period
+#define PWM_DUTY_MIN 1000   // 1ms duty cycle (minimum)
+#define PWM_DUTY_MAX 2000   // 2ms duty cycle (maximum)
+
+// Define the sleep duration in seconds
+#define SLEEP_DURATION 30
+
+// Define the servo runtime in seconds
+#define SERVO_RUNTIME 300
+
+// Initialize the oscillator and ports
+void init(void)
+{
+    // Set the oscillator frequency to 8 MHz
+    OSCCONbits.IRCF = 0b1110;
+    
+    // Configure the input and output pins
+    TRISA = 0b00000001; // RA0 is input
+    TRISB = 0b00000000; // All other pins are outputs
+    ANSEL = 0b00000000; // Digital I/O
+    ANSELH = 0b00000000;
+    
+    // Configure the PWM module
+    CCP1CONbits.CCP1M = 0b1100; // PWM mode
+    PR2 = 199; // PWM frequency = Fosc / (4 * (PR2 + 1)) = 8 MHz / (4 * (199 + 1)) = 10 kHz
+    T2CONbits.T2CKPS = 0b01; // Prescaler = 4
+    T2CONbits.TMR2ON = 1; // Enable Timer2
+}
+
+// Generate a PWM signal with the specified duty cycle
+void set_pwm_duty_cycle(unsigned int duty_cycle)
+{
+    CCP1CONbits.DC1B = duty_cycle & 0b11;
+    CCPR1L = (duty_cycle >> 2) & 0xFF;
+}
+
+// Main program loop
+void main(void)
+{
+    // Initialize the system
+    init();
+    
+    // Wait for the button to be pressed
+    while (BUTTON_PIN == 1);
+    
+    // Sleep for 30 seconds
+    for (unsigned char i = 0; i < SLEEP_DURATION; i++)
+    {
+        __delay_ms(1000);
+    }
+    
+    // Start the servo
+    set_pwm_duty_cycle(PWM_DUTY_MIN);
+    SERVO_PIN = 1;
+    
+    // Wait for the servo to run for 5 minutes
+    for (unsigned char i = 0; i < SERVO_RUNTIME; i++)
+    {
+        // Adjust the PWM duty cycle to control the servo position
+        set_pwm_duty_cycle(PWM_DUTY_MIN + (i * (PWM_DUTY_MAX - PWM_DUTY_MIN) / SERVO_RUNTIME));
+        
+        // Wait for 1 second
+        __
