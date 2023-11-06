@@ -1,0 +1,98 @@
+#Picaxe 08M2
+
+' Define Pins
+symbol motorControl = C.0
+symbol led = C.1
+symbol potentiometer = C.2
+symbol startButton = C.3
+symbol undercarriageServo = C.4
+
+' Define Constants
+symbol maxMotorPower = 255
+symbol motorStartDelay = 5000 ' 5 seconds
+symbol motorRunDuration = 30000 ' 30 seconds
+symbol motorSoftStart = 2000 ' 2 seconds
+symbol motorRunDown = 2000 ' 2 seconds
+symbol undercarriageDeployTime = 10000 ' 10 seconds
+symbol undercarriageRetractTime = 10000 ' 10 seconds
+
+' Variables
+let motorPower = 0
+let motorRunning = 0
+let flightStarted = 0
+let takeOffPowerBoost = 0
+let pushButtonPressed = 0
+let startTime = 0
+let savedDuration = motorRunDuration
+
+' Main Program Loop
+main:
+    ' Check if the start button is pressed
+    if pinC3 = 0 then
+        if flightStarted = 0 then
+            ' Flight has not started, so initialize the flight
+            flightStarted = 1
+            startTime = time
+            savedDuration = motorRunDuration
+            if savedDuration < 60000 then
+                ' Undercarriage servo is only available for flights of one minute plus
+                servo undercarriageServo, 100 ' Retract undercarriage
+            end if
+        else
+            ' Flight is already in progress, stop the motor
+            motorPower = 0
+            servo undercarriageServo, 100 ' Retract undercarriage
+            flightStarted = 0
+        end if
+    end if
+
+    ' Check if the push button is pressed
+    if pinC5 = 0 then
+        motorPower = 0
+        servo undercarriageServo, 100 ' Retract undercarriage
+    end if
+
+    ' Adjust motor power using the potentiometer
+    readadc potentiometer, motorPower
+
+    if flightStarted = 1 then
+        ' Flight is in progress
+        let elapsedTime = time - startTime
+        if elapsedTime >= motorRunDuration then
+            ' Flight duration has elapsed, stop the motor
+            motorPower = 0
+            servo undercarriageServo, 100 ' Retract undercarriage
+            flightStarted = 0
+        else
+            ' Check for take-off power boost
+            if takeOffPowerBoost = 1 and elapsedTime < 3000 then
+                motorPower = maxMotorPower
+            end if
+
+            ' Check for undercarriage deployment
+            if savedDuration >= 60000 and elapsedTime >= 10000 and elapsedTime < (savedDuration - 10000) then
+                servo undercarriageServo, 0 ' Deploy undercarriage
+            end if
+        end if
+    end if
+
+    ' Apply motor soft start and run-down
+    if motorPower > 0 then
+        if elapsedTime < motorSoftStart then
+            ' Soft start phase
+            motorPower = motorPower * (elapsedTime / motorSoftStart)
+        end if
+
+        if elapsedTime >= (motorRunDuration - motorRunDown) then
+            ' Run-down phase
+            motorPower = motorPower * (1 - (elapsedTime - (motorRunDuration - motorRunDown)) / motorRunDown)
+        end if
+    end if
+
+    ' Set motor control and LED
+    pwmout motorControl, motorPower, 100
+    pwmout led, motorPower, 100
+
+    ' Delay for a short period
+    pause 100
+    goto main
